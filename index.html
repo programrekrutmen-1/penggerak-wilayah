@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring Penggerak Wilayah DKI Jakarta</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900/50 z-50 hidden flex items-center justify-center text-white">
+        <div class="bg-slate-800 px-6 py-4 rounded-xl flex items-center gap-3 shadow-lg">
+            <i class="fa-solid fa-spinner fa-spin text-blue-400 text-xl"></i>
+            <span id="loading-text">Menyinkronkan dengan Google Sheets...</span>
+        </div>
+    </div>
+
+    <!-- HALAMAN LOGIN -->
+    <div id="login-page" class="fixed inset-0 bg-slate-900 z-40 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 space-y-6">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-800">Login Dashboard</h1>
+                <p class="text-xs text-slate-500 mt-1">Sistem Pemantauan Penggerak Wilayah DKI Jakarta</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                    <input type="text" id="login-username" required class="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Masukkan username...">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="login-password" required class="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Masukkan password...">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold shadow transition">
+                    Masuk ke Sistem
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- APLIKASI UTAMA (Setelah Login) -->
+    <div id="app-container" class="flex h-screen overflow-hidden hidden">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex md:flex-col justify-between">
+            <div>
+                <div class="p-5 border-b border-slate-800">
+                    <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-blue-500"></i> Dashboard DKI
+                    </h1>
+                    <p id="user-role-badge" class="text-xs text-blue-400 mt-1 font-semibold uppercase tracking-wider">Level: -</p>
+                </div>
+                <nav class="p-4 space-y-2">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-blue-600 text-white font-medium transition">
+                        <i class="fa-solid fa-house"></i> Beranda
+                    </button>
+                    <button onclick="switchTab('input')" id="nav-input" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">
+                        <i class="fa-solid fa-pen-to-square"></i> Input Data Baru
+                    </button>
+                    <button onclick="switchTab('daftar')" id="nav-daftar" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">
+                        <i class="fa-solid fa-table-list"></i> Daftar & Filter Data
+                    </button>
+                    <!-- Menu khusus Provinsi -->
+                    <button onclick="switchTab('manajemen-akun')" id="nav-manajemen-akun" class="w-full hidden items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 transition text-amber-400">
+                        <i class="fa-solid fa-users-gear"></i> Manajemen Akun
+                    </button>
+                </nav>
+            </div>
+            <div class="p-4 border-t border-slate-800 flex justify-between items-center text-xs">
+                <div>
+                    <p class="text-slate-400 font-medium" id="sidebar-username">-</p>
+                    <span class="inline-flex items-center gap-1.5 text-emerald-400 mt-0.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Online Sync
+                    </span>
+                </div>
+                <button onclick="handleLogout()" class="text-rose-400 hover:text-rose-300 p-2 rounded-lg transition" title="Keluar">
+                    <i class="fa-solid fa-right-from-bracket text-base"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-y-auto">
+            
+            <!-- Topbar -->
+            <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
+                <div class="flex items-center gap-4">
+                    <h2 id="page-title" class="text-xl font-bold text-slate-800">Beranda & Statistik Sebaran</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="fetchDataFromSheet()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-rotate"></i> Muat Ulang Data
+                    </button>
+                </div>
+            </header>
+
+            <main class="p-6 space-y-6">
+
+                <!-- TAB 1: BERANDA -->
+                <section id="tab-dashboard" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="text-sm text-slate-500 font-medium">Total Penggerak</p>
+                            <h3 id="stat-total" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="text-sm text-slate-500 font-medium">Penggerak Aktif</p>
+                            <h3 id="stat-aktif" class="text-2xl font-bold text-emerald-600 mt-1">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="text-sm text-slate-500 font-medium">Penggerak Potensial</p>
+                            <h3 id="stat-potensial" class="text-2xl font-bold text-amber-600 mt-1">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p id="stat-label-wilayah" class="text-sm text-slate-500 font-medium">Wilayah Tercakup</p>
+                            <h3 id="stat-kota" class="text-2xl font-bold text-indigo-600 mt-1">0</h3>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 id="chart-title-keaktifan" class="font-bold text-slate-800 mb-4">Sebaran Keaktifan Wilayah</h3>
+                            <div class="relative h-80"><canvas id="chartKeaktifanKota"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 id="chart-title-unsur" class="font-bold text-slate-800 mb-4">Sebaran Unsur Internal Wilayah</h3>
+                            <div class="relative h-80"><canvas id="chartUnsurKota"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 id="chart-title-jangkauan" class="font-bold text-slate-800 mb-4">Sebaran Jangkauan Keluarga Wilayah</h3>
+                        <div class="relative h-80"><canvas id="chartJangkauanDKI"></canvas></div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h3 class="font-bold text-slate-800 text-lg">Grafik Breakdown Detail Per Wilayah</h3>
+                            <select id="selectKotaBreakdown" onchange="updateBreakdownChart()" class="px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                            <div class="relative h-72"><h4 class="text-center text-xs font-semibold text-slate-500 mb-2">Breakdown Status Keaktifan</h4><canvas id="chartBreakdownStatus"></canvas></div>
+                            <div class="relative h-72"><h4 class="text-center text-xs font-semibold text-slate-500 mb-2">Breakdown Unsur Internal</h4><canvas id="chartBreakdownUnsur"></canvas></div>
+                            <div class="relative h-72"><h4 class="text-center text-xs font-semibold text-slate-500 mb-2">Breakdown Jangkauan Keluarga</h4><canvas id="chartBreakdownJangkauan"></canvas></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 2: FORM INPUT DATA -->
+                <section id="tab-input" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                    <h3 id="form-title" class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Formulir Input Data Penggerak Wilayah</h3>
+                    <form id="dataForm" onsubmit="handleFormSubmit(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Kota / Kabupaten</label>
+                            <select id="Kabupaten_Kota" onchange="updateKecamatan()" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Kota / Kabupaten --</option>
+                                <option value="Kota Jakarta Selatan">Kota Jakarta Selatan</option>
+                                <option value="Kota Jakarta Timur">Kota Jakarta Timur</option>
+                                <option value="Kota Jakarta Pusat">Kota Jakarta Pusat</option>
+                                <option value="Kota Jakarta Barat">Kota Jakarta Barat</option>
+                                <option value="Kota Jakarta Utara">Kota Jakarta Utara</option>
+                                <option value="Kabupaten Kepulauan Seribu">Kabupaten Kepulauan Seribu</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Kecamatan</label>
+                            <select id="Kecamatan" onchange="updateKelurahan()" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Kecamatan --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Kelurahan</label>
+                            <select id="Kelurahan" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Kelurahan --</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Pengisi / PJ Data</label>
+                            <input type="text" id="Nama_Pengisi" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nomor WhatsApp Pengisi</label>
+                            <input type="text" id="Nomor_WhatsApp" required placeholder="08xxxxxxxxxx" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Penggerak</label>
+                            <input type="text" id="Nama_Penggerak" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Unsur Internal</label>
+                            <select id="Unsur_Internal" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Unsur Internal --</option>
+                                <option value="Struktur partai (DPW/DPD/DPC/DPRa)">Struktur partai (DPW/DPD/DPC/DPRa)</option>
+                                <option value="Kader pelopor">Kader pelopor</option>
+                                <option value="Aleg atau mantan aleg">Aleg atau mantan aleg</option>
+                                <option value="Caleg atau mantan caleg">Caleg atau mantan caleg</option>
+                                <option value="Relawan partai atau caleg">Relawan partai atau caleg</option>
+                                <option value="Koordinator atau mantan saksi">Koordinator atau mantan saksi</option>
+                                <option value="Penggerak pelayanan atau komunitas">Penggerak pelayanan atau komunitas</option>
+                                <option value="Simpatisan aktif">Simpatisan aktif</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Basis RW (Pusat Aktivitas / Wilayah Pengaruh)</label>
+                            <input type="text" id="Basis_RW" required placeholder="misal: RW 01 atau Dusun Mekarjaya" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status Keaktifan</label>
+                            <select id="Status_Keaktifan" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Status Keaktifan --</option>
+                                <option value="Aktif">Aktif (Rutin berkomunikasi/berkegiatan, mudah dihubungi, siap bergerak)</option>
+                                <option value="Potensial">Potensial (Punya pengaruh, belum rutin bergerak/belum ada penugasan)</option>
+                                <option value="Tidak Aktif">Tidak Aktif (Pernah terlibat, saat ini tidak bergerak/sulit dihubungi)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Jangkauan Keluarga</label>
+                            <select id="Jangkauan_Keluarga" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">-- Pilih Jangkauan Keluarga --</option>
+                                <option value="1–10 keluarga (Lingkaran keluarga/tetangga dekat)">1–10 keluarga (Lingkaran keluarga/tetangga dekat)</option>
+                                <option value="11–25 keluarga (Kelompok lokal aktif)">11–25 keluarga (Kelompok lokal aktif)</option>
+                                <option value="26–50 keluarga (Jaringan komunitas/pelayanan luas)">26–50 keluarga (Jaringan komunitas/pelayanan luas)</option>
+                                <option value="Lebih dari 50 keluarga (Jaringan sangat luas)">Lebih dari 50 keluarga (Jaringan sangat luas)</option>
+                                <option value="Belum diketahui">Belum diketahui</option>
+                            </select>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Peranan di Wilayah</label>
+                            <input type="text" id="Peranan_Wilayah" required placeholder="Contoh: Tokoh Pemuda, Ket. RT, Penggerak Posyandu, dll." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Catatan Tambahan</label>
+                            <textarea id="Catatan" rows="2" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                        </div>
+
+                        <div class="md:col-span-2 flex justify-end gap-3 pt-4">
+                            <button type="button" onclick="switchTab('daftar')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium transition">Batal</button>
+                            <button type="submit" id="btn-submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium shadow transition">
+                                <i class="fa-solid fa-save mr-1"></i> Kirim ke Google Sheets
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- TAB 3: DAFTAR & FILTER DATA -->
+                <section id="tab-daftar" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between gap-4 items-center">
+                        <h3 class="text-lg font-bold text-slate-800">Daftar Penggerak Wilayah (Sinkron Online)</h3>
+                        <div class="flex flex-wrap gap-2 w-full md:w-auto items-center">
+                            <input type="text" id="searchFilter" onkeyup="filterTable()" placeholder="Cari nama, kelurahan, RW..." class="px-3 py-2 border rounded-lg text-sm w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <button onclick="fetchDataFromSheet()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow transition flex items-center gap-1">
+                                <i class="fa-solid fa-rotate"></i> Muat Data
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto border border-slate-100 rounded-lg">
+                        <table id="dataTable" class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                    <th class="p-3">Kab/Kota</th>
+                                    <th class="p-3">Kec/Kel</th>
+                                    <th class="p-3">PJ Data & WA</th>
+                                    <th class="p-3">Nama Penggerak</th>
+                                    <th class="p-3">Unsur Internal</th>
+                                    <th class="p-3">Basis RW</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3">Jangkauan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-100">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- TAB 4: MANAJEMEN AKUN (KHUSUS PROVINSI) -->
+                <section id="tab-manajemen-akun" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Manajemen Akun Admin Wilayah</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Buat akun untuk tingkat Kabupaten/Kota atau Kecamatan yang langsung tersimpan secara online.</p>
+                    </div>
+
+                    <form onsubmit="handleCreateAccount(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Level Akun</label>
+                            <select id="new-role" onchange="toggleWilayahInput()" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm">
+                                <option value="kabkota">Admin Kab/Kota</option>
+                                <option value="kecamatan">Admin Kecamatan</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Pilih Wilayah Tugas</label>
+                            <select id="new-wilayah" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm">
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                            <input type="text" id="new-username" required placeholder="Contoh: jaksel_pusat" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                            <input type="password" id="new-password" required placeholder="Minimal 6 karakter" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                        <div class="md:col-span-3 flex justify-end">
+                            <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">
+                                <i class="fa-solid fa-user-plus mr-1"></i> Buat Akun Baru
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="space-y-3">
+                        <h4 class="font-bold text-slate-700 text-sm">Daftar Akun Aktif (Online Sync)</h4>
+                        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-100 text-slate-700 border-b">
+                                    <tr>
+                                        <th class="p-3">Username</th>
+                                        <th class="p-3">Level</th>
+                                        <th class="p-3">Wilayah Tugas</th>
+                                        <th class="p-3">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="accountTableBody" class="divide-y divide-slate-100">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Script Utama -->
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzIk4FXNq92HfI0RAfERekcDHH91v_-NKyMpa0SGXiyb5GqELziHxUGeyw1CRs_on8b1Q/exec";
+
+        const dataWilayahDKI = {
+            "Kota Jakarta Selatan": {
+                "Jagakarsa": ["Jagakarsa", "Ciganjur", "Srengseng Sawah", "Lenteng Agung", "Cipedak", "Tanjung Barat"],
+                "Pasar Minggu": ["Pasar Minggu", "Pejaten Barat", "Pejaten Timur", "Kebagusan", "Jati Padang", "Ragunan"],
+                "Cilandak": ["Cilandak Barat", "Lebak Bulus", "Pondok Labu", "Gandaria Selatan", "Cipete Selatan"],
+                "Kebayoran Baru": ["Kramat Pela", "Gandaria Utara", "Cipete Utara", "Pulo", "Melawai", "Gunung", "Senayan", "Rawa Barat", "Selong", "Petogogan"],
+                "Kebayoran Lama": ["Grogol Utara", "Grogol Selatan", "Cipulir", "Kebayoran Lama Utara", "Kebayoran Lama Selatan", "Pondok Pinang"],
+                "Pancoran": ["Kalibata", "Rawa Barat", "Duren Tiga", "Cikoko", "Pengadegan", "Pancoran"],
+                "Tebet": ["Tebet Barat", "Tebet Timur", "Kebon Baru", "Bukit Duri", "Manggarai", "Manggarai Selatan", "Menteng Dalam"],
+                "Setiabudi": ["Setiabudi", "Karet", "Karet Semanggi", "Karet Kuningan", "Kuningan Timur", "Menteng Atas", "Pasar Manggis", "Guntur"],
+                "Mampang Prapatan": ["Kuningan Barat", "Pela Mampang", "Bangka", "Tegal Parang", "Mampang Prapatan"],
+                "Pesanggrahan": ["Ulujami", "Petukangan Utara", "Petukangan Selatan", "Pesanggrahan", "Bintaro"]
+            },
+            "Kota Jakarta Timur": {
+                "Duren Sawit": ["Pondok Bambu", "Duren Sawit", "Pondok Kelapa", "Pondok Kopi", "Malaka Jaya", "Malaka Sari", "Klender"],
+                "Jatinegara": ["Bali Mester", "Kampung Melayu", "Bidara Cina", "Cipinang Cempedak", "Rawa Bening", "Cipinang Muara", "Cipinang Besar Selatan", "Cipinang Besar Utara"],
+                "Cipayung": ["Lubang Buaya", "Ceger", "Cipayung", "Munjul", "Pondok Ranggon", "Cilangkap", "Setu", "Bambu Apus"],
+                "Ciracas": ["Cibubur", "Ciracas", "Kelapa Dua Wetan", "Rambutan", "Susukan"],
+                "Cakung": ["Cakung", "Cakung Timur", "Rawa Terate", "Penggilingan", "Pulogebang", "Ujung Menteng", "Jatinegara"],
+                "Matraman": ["Pisangan Baru", "Utan Kayu Selatan", "Utan Kayu Utara", "Kayu Manis", "Pal Meriam", "Kebon Manggis"],
+                "Pulogadung": ["Kayu Putih", "Jati", "Rawamangun", "Pisangan Timur", "Cipinang", "Jatinegara Kaum", "Pulo Gadung"],
+                "Kramat Jati": ["Kramat Jati", "Batu Ampar", "Balekambang", "Kampung Tengah", "Dukuh", "Cawang", "Cililitan"],
+                "Makasar": ["Pinang Ranti", "Makasar", "Halim Perdanakusuma", "Cipinang Melayu", "Kebon Pala"],
+                "Pasar Rebo": ["Pekanbaru", "Kalisari", "Kampung Baru", "Cijantung", "Baru"]
+            },
+            "Kota Jakarta Pusat": {
+                "Menteng": ["Menteng", "Pegangsaan", "Cikini", "Gondangdia", "Kebon Sirih"],
+                "Tanah Abang": ["Bendungan Hilir", "Karet Tengsin", "Kebon Melati", "Kebon Kacang", "Kampung Bali", "Petamburan", "Gelora"],
+                "Kemayoran": ["Gunung Sahari Selatan", "Kemayoran", "Kebon Kosong", "Harapan Mulya", "Cempaka Baru", "Utan Panjang", "Sumur Batu", "Serdang"],
+                "Senen": ["Senen", "Kwitang", "Kenari", "Paseban", "Kramat", "Bungur"],
+                "Cempaka Putih": ["Cempaka Putih Timur", "Cempaka Putih Barat", "Rawasari"],
+                "Johar Baru": ["Johar Baru", "Galur", "Tanah Tinggi", "Kampung Rawa"],
+                "Sawah Besar": ["Pasar Baru", "Gunung Sahari Utara", "Mangga Dua Selatan", "Karang Anyar", "Kartini"],
+                "Gambir": ["Gambir", "Kebon Kelapa", "Petojo Selatan", "Duri Pulo", "Petojo Utara", "Cideng"]
+            },
+            "Kota Jakarta Barat": {
+                "Kebon Jeruk": ["Duri Kepa", "Kedoya Selatan", "Kedoya Utara", "Kebon Jeruk", "Sukabumi Utara", "Kelapa Dua", "Sukabumi Selatan"],
+                "Kembangan": ["Kembangan Utara", "Kembangan Selatan", "Meruya Utara", "Srengseng", "Joglo", "Meruya Selatan"],
+                "Grogol Petamburan": ["Tanjung Duren Utara", "Tanjung Duren Selatan", "Tomang", "Grogol", "Jelambar", "Jelambar Baru", "Wijaya Kusuma"],
+                "Cengkareng": ["Cengkareng Barat", "Cengkareng Timur", "Rawa Buaya", "Duri Kosambi", "Kapuk", "Kedaung Kali Angke"],
+                "Kalideres": ["Kalideres", "Semanan", "Pegangsaan", "Kamal", "Tegal Alur"],
+                "Palmerah": ["Palmerah", "Slipi", "Kota Bambu Utara", "Kota Bambu Selatan", "Jatipulo", "Kemanggisan"],
+                "Taman Sari": ["Pinangsia", "Glodok", "Keagungan", "Krukut", "Taman Sari", "Maphar", "Tangki", "Mangga Besar"],
+                "Tambora": ["Tanah Sereal", "Roa Malaka", "Pekojan", "Jembatan Nora", "Krendang", "Duri Utara", "Duri Selatan", "Kalianyar", "Jembatan Besi", "Angke", "Tambora"]
+            },
+            "Kota Jakarta Utara": {
+                "Penjaringan": ["Penjaringan", "Pluit", "Pejagalan", "Kapuk Muara", "Kamal Muara"],
+                "Pademangan": ["Pademangan Timur", "Pademangan Barat", "Ancol"],
+                "Tanjung Priok": ["Tanjung Priok", "Kebon Bawang", "Sunter Agung", "Sunter Jaya", "Papanggo", "Warakas", "Sungai Bambu"],
+                "Koja": ["Koja", "Rawa Badak Utara", "Rawa Badak Selatan", "Tugu Utara", "Tugu Selatan", "Lagoa"],
+                "Cilincing": ["Cilincing", "Kali Baru", "Semper Barat", "Semper Timur", "Sukapura", "Rorotan", "Marunda"],
+                "Kelapa Gading": ["Kelapa Gading Barat", "Kelapa Gading Timur", "Pegangsaan Dua"]
+            },
+            "Kabupaten Kepulauan Seribu": {
+                "Kepulauan Seribu Selatan": ["Pulau Tidung", "Pulau Pari", "Pulau Untung Jawa"],
+                "Kepulauan Seribu Utara": ["Pulau Kelapa", "Pulau Harapan", "Pulau Panggang"]
+            }
+        };
+
+        const mappingKota = [
+            { full: "Kota Jakarta Selatan", keywords: ["selatan", "jaksel"] },
+            { full: "Kota Jakarta Timur", keywords: ["timur", "jaktim"] },
+            { full: "Kota Jakarta Pusat", keywords: ["pusat", "jakpus"] },
+            { full: "Kota Jakarta Barat", keywords: ["barat", "jakbar"] },
+            { full: "Kota Jakarta Utara", keywords: ["utara", "jakut"] },
+            { full: "Kabupaten Kepulauan Seribu", keywords: ["seribu", "kepulauan seribu"] }
+        ];
+
+        const jangkauanCategories = [
+            { label: "1–10 keluarga", key: "1–10" },
+            { label: "11–25 keluarga", key: "11–25" },
+            { label: "26–50 keluarga", key: "26–50" },
+            { label: "> 50 keluarga", key: "50" },
+            { label: "Belum diketahui", key: "belum" }
+        ];
+
+        const MASTER_PROVINSI = { username: "dpwdki", password: "dpwpks", role: "provinsi", wilayah: "DKI Jakarta" };
+
+        let currentUser = null;
+        let globalData = [];
+        let globalAccounts = [MASTER_PROVINSI];
+
+        let chartKeaktifanInstance = null;
+        let chartUnsurInstance = null;
+        let chartJangkauanDKIInstance = null;
+        let chartBreakdownStatusInstance = null;
+        let chartBreakdownUnsurInstance = null;
+        let chartBreakdownJangkauanInstance = null;
+
+        function showLoading(text) {
+            document.getElementById('loading-text').innerText = text;
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value.trim();
+
+            const found = globalAccounts.find(acc => acc.username === u && acc.password === p);
+
+            if (found) {
+                currentUser = found;
+                localStorage.setItem('dki_current_user', JSON.stringify(currentUser));
+                initSessionAfterLogin();
+            } else {
+                alert("Username atau password salah!");
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('dki_current_user');
+            currentUser = null;
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+        }
+
+        async function initSession() {
+            await fetchDataFromSheet();
+
+            const saved = localStorage.getItem('dki_current_user');
+            if (saved) {
+                const parsedUser = JSON.parse(saved);
+                currentUser = parsedUser;
+                initSessionAfterLogin();
+            } else {
+                document.getElementById('login-page').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('hidden');
+            }
+        }
+
+        function initSessionAfterLogin() {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+            document.getElementById('sidebar-username').innerText = currentUser.username;
+            document.getElementById('user-role-badge').innerText = `Level: ${currentUser.role.toUpperCase()} (${currentUser.wilayah})`;
+
+            if (currentUser.role === 'provinsi') {
+                document.getElementById('nav-manajemen-akun').classList.remove('hidden');
+                document.getElementById('nav-manajemen-akun').classList.add('flex');
+                toggleWilayahInput();
+                loadAccountTable();
+            } else {
+                document.getElementById('nav-manajemen-akun').classList.add('hidden');
+                document.getElementById('nav-manajemen-akun').classList.remove('flex');
+            }
+
+            populateBreakdownDropdown();
+            applyRoleRestrictions();
+            renderTable();
+            updateSummary();
+            updateCharts();
+            updateBreakdownChart();
+        }
+
+        function populateBreakdownDropdown() {
+            const selectBreakdown = document.getElementById('selectKotaBreakdown');
+            selectBreakdown.innerHTML = '';
+
+            if (currentUser.role === 'provinsi') {
+                mappingKota.forEach(m => {
+                    selectBreakdown.innerHTML += `<option value="${m.full}">${m.full}</option>`;
+                });
+            } else if (currentUser.role === 'kabkota') {
+                const kecs = dataWilayahDKI[currentUser.wilayah];
+                if (kecs) {
+                    Object.keys(kecs).forEach(k => {
+                        selectBreakdown.innerHTML += `<option value="${k}">${k}</option>`;
+                    });
+                }
+            } else if (currentUser.role === 'kecamatan') {
+                for (let kota in dataWilayahDKI) {
+                    if (dataWilayahDKI[kota][currentUser.wilayah]) {
+                        dataWilayahDKI[kota][currentUser.wilayah].forEach(kel => {
+                            selectBreakdown.innerHTML += `<option value="${kel}">${kel}</option>`;
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        function applyRoleRestrictions() {
+            const kotaSelect = document.getElementById('Kabupaten_Kota');
+            const kecSelect = document.getElementById('Kecamatan');
+
+            if (currentUser.role === 'kabkota') {
+                kotaSelect.value = currentUser.wilayah;
+                kotaSelect.disabled = true;
+                updateKecamatan();
+            } else if (currentUser.role === 'kecamatan') {
+                for (let kota in dataWilayahDKI) {
+                    if (dataWilayahDKI[kota][currentUser.wilayah]) {
+                        kotaSelect.value = kota;
+                        kotaSelect.disabled = true;
+                        updateKecamatan(currentUser.wilayah);
+                        break;
+                    }
+                }
+                kecSelect.disabled = true;
+            }
+        }
+
+        window.onload = function() {
+            initSession();
+        }
+
+        function toggleWilayahInput() {
+            const role = document.getElementById('new-role').value;
+            const wilSelect = document.getElementById('new-wilayah');
+            wilSelect.innerHTML = '';
+
+            if (role === 'kabkota') {
+                Object.keys(dataWilayahDKI).forEach(kota => {
+                    wilSelect.innerHTML += `<option value="${kota}">${kota}</option>`;
+                });
+            } else if (role === 'kecamatan') {
+                Object.keys(dataWilayahDKI).forEach(kota => {
+                    Object.keys(dataWilayahDKI[kota]).forEach(kec => {
+                        wilSelect.innerHTML += `<option value="${kec}">${kec} (${kota})</option>`;
+                    });
+                });
+            }
+        }
+
+        async function handleCreateAccount(event) {
+            event.preventDefault();
+            const role = document.getElementById('new-role').value;
+            const wilayah = document.getElementById('new-wilayah').value;
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value.trim();
+
+            if (globalAccounts.some(acc => acc.username === username)) {
+                alert("Username sudah digunakan, pilih yang lain!");
+                return;
+            }
+
+            const newAccRow = {
+                Timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                Kabupaten_Kota: "ACCOUNT_CONFIG",
+                Kecamatan: role,
+                Kelurahan: wilayah,
+                Nama_Pengisi: username,
+                Nomor_WhatsApp: password,
+                Nama_Penggerak: username,
+                Unsur_Internal: role,
+                Basis_RW: wilayah,
+                Status_Keaktifan: "ActiveAccount",
+                Jangkauan_Keluarga: "-",
+                Peranan_Wilayah: "-",
+                Catatan: "Akun Admin Wilayah"
+            };
+
+            showLoading("Menyimpan akun baru secara online...");
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newAccRow)
+                });
+                
+                setTimeout(async () => {
+                    await fetchDataFromSheet();
+                    hideLoading();
+                    alert("Akun berhasil dibuat dan disinkronkan ke server!");
+                    document.getElementById('new-username').value = '';
+                    document.getElementById('new-password').value = '';
+                    loadAccountTable();
+                }, 2500);
+
+            } catch (error) {
+                console.error("Gagal buat akun:", error);
+                hideLoading();
+                alert('Terjadi kesalahan saat menyimpan akun.');
+            }
+        }
+
+        function loadAccountTable() {
+            const tbody = document.getElementById('accountTableBody');
+            tbody.innerHTML = '';
+
+            globalAccounts.forEach((acc) => {
+                if(acc.username === 'dpwdki') return;
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-700">${acc.username}</td>
+                        <td class="p-3 uppercase text-xs font-semibold text-blue-600">${acc.role}</td>
+                        <td class="p-3">${acc.wilayah}</td>
+                        <td class="p-3">
+                            <span class="text-xs text-emerald-600 font-semibold"><i class="fa-solid fa-check"></i> Aktif Online</span>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function switchTab(tabId) {
+            ['dashboard', 'input', 'daftar', 'manajemen-akun'].forEach(id => {
+                const el = document.getElementById(`tab-${id}`);
+                const nav = document.getElementById(`nav-${id}`);
+                if(el) el.classList.add('hidden');
+                if(nav) {
+                    nav.classList.remove('bg-blue-600', 'text-white');
+                    nav.classList.add('hover:bg-slate-800');
+                }
+            });
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            if(document.getElementById(`nav-${tabId}`)) {
+                document.getElementById(`nav-${tabId}`).classList.add('bg-blue-600', 'text-white');
+                document.getElementById(`nav-${tabId}`).classList.remove('hover:bg-slate-800');
+            }
+            
+            const titles = { dashboard: 'Beranda & Statistik Sebaran', input: 'Input Data Baru', daftar: 'Daftar & Filter Data', 'manajemen-akun': 'Manajemen Akun Admin' };
+            document.getElementById('page-title').innerText = titles[tabId];
+            if(tabId === 'dashboard') {
+                updateCharts();
+                updateBreakdownChart();
+            }
+        }
+
+        function updateKecamatan(selectedKec = '') {
+            const kota = document.getElementById('Kabupaten_Kota').value;
+            const kecSelect = document.getElementById('Kecamatan');
+            const kelSelect = document.getElementById('Kelurahan');
+            kecSelect.innerHTML = '<option value="">-- Pilih Kecamatan --</option>';
+            kelSelect.innerHTML = '<option value="">-- Pilih Kelurahan --</option>';
+
+            if (kota && dataWilayahDKI[kota]) {
+                Object.keys(dataWilayahDKI[kota]).forEach(kec => {
+                    kecSelect.innerHTML += `<option value="${kec}" ${kec === selectedKec ? 'selected' : ''}>${kec}</option>`;
+                });
+            }
+            if (currentUser && currentUser.role === 'kecamatan') {
+                kecSelect.value = currentUser.wilayah;
+                kecSelect.disabled = true;
+                updateKelurahan();
+            }
+        }
+
+        function updateKelurahan(selectedKel = '') {
+            const kota = document.getElementById('Kabupaten_Kota').value;
+            const kec = document.getElementById('Kecamatan').value;
+            const kelSelect = document.getElementById('Kelurahan');
+            kelSelect.innerHTML = '<option value="">-- Pilih Kelurahan --</option>';
+
+            if (kota && kec && dataWilayahDKI[kota][kec]) {
+                dataWilayahDKI[kota][kec].forEach(kel => {
+                    kelSelect.innerHTML += `<option value="${kel}" ${kel === selectedKel ? 'selected' : ''}>${kel}</option>`;
+                });
+            }
+        }
+
+        async function fetchDataFromSheet() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const rawData = await response.json();
+                
+                globalAccounts = [MASTER_PROVINSI];
+                const penggerakData = [];
+
+                rawData.forEach(row => {
+                    const kKota = row.Kabupaten_Kota || row['Kabupaten/Kota'] || "";
+                    
+                    if (kKota === "ACCOUNT_CONFIG") {
+                        const userVal = row.Nama_Pengisi || row['Nama Pengisi / PJ Data'] || row.Nama_Penggerak || row['Nama Penggerak'] || "";
+                        const passVal = row.Nomor_WhatsApp || row['Nomor WhatsApp Pengisi'] || row.Password || "";
+                        const roleVal = row.Kecamatan || row['Kecamatan'] || "";
+                        const wilVal = row.Kelurahan || row['Kelurahan'] || row.Basis_RW || "";
+
+                        if (userVal) {
+                            globalAccounts.push({
+                                username: userVal.toString().trim(),
+                                password: passVal.toString().trim(),
+                                role: roleVal.toString().trim(),
+                                wilayah: wilVal.toString().trim()
+                            });
+                        }
+                    } else {
+                        penggerakData.push(row);
+                    }
+                });
+
+                if (currentUser) {
+                    if (currentUser.role === 'kabkota') {
+                        const wilTarget = currentUser.wilayah.replace('Kota ', '').replace('Kabupaten ', '').toLowerCase();
+                        globalData = penggerakData.filter(d => (d.Kabupaten_Kota || d['Kabupaten/Kota'] || "").toLowerCase().includes(wilTarget));
+                    } else if (currentUser.role === 'kecamatan') {
+                        globalData = penggerakData.filter(d => (d.Kecamatan || "").toLowerCase() === currentUser.wilayah.toLowerCase());
+                    } else {
+                        globalData = penggerakData;
+                    }
+                } else {
+                    globalData = penggerakData;
+                }
+
+                if(currentUser && currentUser.role === 'provinsi') {
+                    loadAccountTable();
+                }
+
+                renderTable();
+                updateSummary();
+                if(currentUser) {
+                    updateCharts();
+                    updateBreakdownChart();
+                }
+            } catch (error) {
+                console.error("Gagal memuat data:", error);
+            }
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const statusFull = document.getElementById('Status_Keaktifan').value;
+            const statusSimple = statusFull.toLowerCase().includes('aktif') && !statusFull.toLowerCase().includes('tidak') ? 'Aktif' : (statusFull.toLowerCase().includes('potensial') ? 'Potensial' : 'Tidak Aktif');
+
+            const newData = {
+                Timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                Kabupaten_Kota: document.getElementById('Kabupaten_Kota').value,
+                Kecamatan: document.getElementById('Kecamatan').value,
+                Kelurahan: document.getElementById('Kelurahan').value,
+                Nama_Pengisi: document.getElementById('Nama_Pengisi').value,
+                Nomor_WhatsApp: document.getElementById('Nomor_WhatsApp').value,
+                Nama_Penggerak: document.getElementById('Nama_Penggerak').value,
+                Unsur_Internal: document.getElementById('Unsur_Internal').value,
+                Basis_RW: document.getElementById('Basis_RW').value,
+                Status_Keaktifan: statusSimple,
+                Jangkauan_Keluarga: document.getElementById('Jangkauan_Keluarga').value,
+                Peranan_Wilayah: document.getElementById('Peranan_Wilayah').value,
+                Catatan: document.getElementById('Catatan').value
+            };
+
+            showLoading("Menyimpan data ke Google Sheets...");
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newData)
+                });
+                alert('Data berhasil dikirim dan disimpan ke Google Sheets secara online!');
+                document.getElementById('dataForm').reset();
+                applyRoleRestrictions();
+                await fetchDataFromSheet();
+                switchTab('daftar');
+            } catch (error) {
+                console.error("Gagal menyimpan:", error);
+                alert('Terjadi kesalahan saat menyimpan data.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            globalData.forEach((item) => {
+                let badgeColor = 'bg-slate-100 text-slate-700';
+                const st = item.Status_Keaktifan || item['Status Keaktifan'] || '';
+                if(st === 'Aktif') badgeColor = 'bg-emerald-100 text-emerald-700';
+                else if(st === 'Potensial') badgeColor = 'bg-amber-100 text-amber-700';
+                else if(st === 'Tidak Aktif') badgeColor = 'bg-rose-100 text-rose-700';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-700">${item.Kabupaten_Kota || item['Kabupaten/Kota'] || '-'}</td>
+                        <td class="p-3">${item.Kecamatan || '-'}<br><span class="text-xs text-slate-400">${item.Kelurahan || '-'}</span></td>
+                        <td class="p-3">${item.Nama_Pengisi || item['Nama Pengisi / PJ Data'] || '-'}<br><span class="text-xs text-slate-400">${item.Nomor_WhatsApp || item['Nomor WhatsApp Pengisi'] || '-'}</span></td>
+                        <td class="p-3 font-semibold text-slate-800">${item.Nama_Penggerak || item['Nama Penggerak'] || '-'}</td>
+                        <td class="p-3 text-xs">${item.Unsur_Internal || item['Unsur Internal'] || '-'}</td>
+                        <td class="p-3">${item.Basis_RW || item['Basis RW'] || '-'}</td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${badgeColor}">${st}</span></td>
+                        <td class="p-3 text-xs">${item.Jangkauan_Keluarga || item['Jangkauan Keluarga'] || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function filterTable() {
+            const query = document.getElementById('searchFilter').value.toLowerCase();
+            const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+            for (let row of rows) {
+                let text = row.innerText.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            }
+        }
+
+        function updateSummary() {
+            document.getElementById('stat-total').innerText = globalData.length;
+            document.getElementById('stat-aktif').innerText = globalData.filter(d => (d.Status_Keaktifan || d['Status Keaktifan'] || '') === 'Aktif').length;
+            document.getElementById('stat-potensial').innerText = globalData.filter(d => (d.Status_Keaktifan || d['Status Keaktifan'] || '') === 'Potensial').length;
+            
+            if (currentUser.role === 'provinsi') {
+                document.getElementById('stat-label-wilayah').innerText = "Kota/Kab. Terisi";
+                const uniqueKota = [...new Set(globalData.map(d => d.Kabupaten_Kota || d['Kabupaten/Kota']).filter(k => k && k !== '-'))];
+                document.getElementById('stat-kota').innerText = uniqueKota.length;
+            } else if (currentUser.role === 'kabkota') {
+                document.getElementById('stat-label-wilayah').innerText = "Kecamatan Terisi";
+                const uniqueKec = [...new Set(globalData.map(d => d.Kecamatan).filter(k => k && k !== '-'))];
+                document.getElementById('stat-kota').innerText = uniqueKec.length;
+            } else {
+                document.getElementById('stat-label-wilayah').innerText = "Kelurahan Terisi";
+                const uniqueKel = [...new Set(globalData.map(d => d.Kelurahan).filter(k => k && k !== '-'))];
+                document.getElementById('stat-kota').innerText = uniqueKel.length;
+            }
+        }
+
+        function updateCharts() {
+            updateSummary();
+
+            let labelsWilayah = [];
+            let getWilayahKey = null;
+
+            if (currentUser.role === 'provinsi') {
+                labelsWilayah = ["Jaksel", "Jaktim", "Jakpus", "Jakbar", "Jakut", "Kep. Seribu"];
+                getWilayahKey = (d, index) => {
+                    const kotaData = (d.Kabupaten_Kota || d['Kabupaten/Kota'] || "").toLowerCase();
+                    return mappingKota[index].keywords.some(kw => kotaData.includes(kw));
+                };
+                document.getElementById('chart-title-keaktifan').innerText = "Sebaran Keaktifan per Kota/Kab.";
+                document.getElementById('chart-title-unsur').innerText = "Sebaran Unsur Internal per Kota/Kab.";
+                document.getElementById('chart-title-jangkauan').innerText = "Sebaran Jangkauan Keluarga se-DKI Jakarta";
+            } else if (currentUser.role === 'kabkota') {
+                const kecs = dataWilayahDKI[currentUser.wilayah] ? Object.keys(dataWilayahDKI[currentUser.wilayah]) : [];
+                labelsWilayah = kecs;
+                getWilayahKey = (d, index) => {
+                    return (d.Kecamatan || "").toLowerCase() === kecs[index].toLowerCase();
+                };
+                document.getElementById('chart-title-keaktifan').innerText = `Sebaran Keaktifan per Kecamatan (${currentUser.wilayah})`;
+                document.getElementById('chart-title-unsur').innerText = `Sebaran Unsur Internal per Kecamatan (${currentUser.wilayah})`;
+                document.getElementById('chart-title-jangkauan').innerText = `Sebaran Jangkauan Keluarga (${currentUser.wilayah})`;
+            } else {
+                let kels = [];
+                for (let kota in dataWilayahDKI) {
+                    if (dataWilayahDKI[kota][currentUser.wilayah]) {
+                        kels = dataWilayahDKI[kota][currentUser.wilayah];
+                        break;
+                    }
+                }
+                labelsWilayah = kels;
+                getWilayahKey = (d, index) => {
+                    return (d.Kelurahan || "").toLowerCase() === kels[index].toLowerCase();
+                };
+                document.getElementById('chart-title-keaktifan').innerText = `Sebaran Keaktifan per Kelurahan (${currentUser.wilayah})`;
+                document.getElementById('chart-title-unsur').innerText = `Sebaran Unsur Internal per Kelurahan (${currentUser.wilayah})`;
+                document.getElementById('chart-title-jangkauan').innerText = `Sebaran Jangkauan Keluarga (${currentUser.wilayah})`;
+            }
+
+            function getCountByWilayah(wIndex, statusFilter = null) {
+                return globalData.filter(d => {
+                    if (!getWilayahKey(d, wIndex)) return false;
+                    if (statusFilter) {
+                        const statusData = (d.Status_Keaktifan || d['Status Keaktifan'] || "").toLowerCase();
+                        if (!statusData.includes(statusFilter.toLowerCase())) return false;
+                    }
+                    return true;
+                }).length;
+            }
+
+            const activeData = labelsWilayah.map((_, i) => getCountByWilayah(i, 'Aktif'));
+            const potensialData = labelsWilayah.map((_, i) => getCountByWilayah(i, 'Potensial'));
+            const nonActiveData = labelsWilayah.map((_, i) => getCountByWilayah(i, 'Tidak Aktif'));
+
+            if(chartKeaktifanInstance) chartKeaktifanInstance.destroy();
+            const ctxKeaktifan = document.getElementById('chartKeaktifanKota').getContext('2d');
+            chartKeaktifanInstance = new Chart(ctxKeaktifan, {
+                type: 'bar',
+                data: {
+                    labels: labelsWilayah,
+                    datasets: [
+                        { label: 'Aktif', data: activeData, backgroundColor: '#10b981' },
+                        { label: 'Potensial', data: potensialData, backgroundColor: '#f59e0b' },
+                        { label: 'Tidak Aktif', data: nonActiveData, backgroundColor: '#ef4444' }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { precision: 0 } },
+                        y: { stacked: true }
+                    }
+                }
+            });
+
+            const unsurList = ["Struktur partai", "Kader pelopor", "Aleg", "Caleg", "Relawan", "Koordinator", "Penggerak pelayanan", "Simpatisan aktif"];
+            const unsurKeywords = [
+                ["struktur partai", "dpw", "dpd", "dpc"],
+                ["kader pelopor"], ["aleg"], ["caleg"], ["relawan"],
+                ["koordinator", "saksi"], ["penggerak pelayanan", "komunitas"], ["simpatisan"]
+            ];
+            const unsurColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#06b6d4', '#84cc16', '#64748b'];
+
+            const unsurDatasets = unsurList.map((labelName, index) => {
+                const keywords = unsurKeywords[index];
+                const dataPerWilayah = labelsWilayah.map((_, wI) => {
+                    return globalData.filter(d => {
+                        if (!getWilayahKey(d, wI)) return false;
+                        const unsurData = (d.Unsur_Internal || d['Unsur Internal'] || "").toLowerCase();
+                        return keywords.some(kw => unsurData.includes(kw));
+                    }).length;
+                });
+                return { label: labelName, data: dataPerWilayah, backgroundColor: unsurColors[index % unsurColors.length] };
+            });
+
+            if(chartUnsurInstance) chartUnsurInstance.destroy();
+            const ctxUnsur = document.getElementById('chartUnsurKota').getContext('2d');
+            chartUnsurInstance = new Chart(ctxUnsur, {
+                type: 'bar',
+                data: { labels: labelsWilayah, datasets: unsurDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+
+            const jangkauanColors = ['#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#94a3b8'];
+            const jangkauanDatasets = jangkauanCategories.map((cat, index) => {
+                const dataPerWilayah = labelsWilayah.map((_, wI) => {
+                    return globalData.filter(d => {
+                        if (!getWilayahKey(d, wI)) return false;
+                        const jData = (d.Jangkauan_Keluarga || d['Jangkauan Keluarga'] || "").toLowerCase();
+                        if (cat.key === '50') return jData.includes('lebih dari 50');
+                        return jData.includes(cat.key);
+                    }).length;
+                });
+                return { label: cat.label, data: dataPerWilayah, backgroundColor: jangkauanColors[index] };
+            });
+
+            if(chartJangkauanDKIInstance) chartJangkauanDKIInstance.destroy();
+            const ctxJDKI = document.getElementById('chartJangkauanDKI').getContext('2d');
+            chartJangkauanDKIInstance = new Chart(ctxJDKI, {
+                type: 'bar',
+                data: { labels: labelsWilayah, datasets: jangkauanDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        }
+
+        function updateBreakdownChart() {
+            const selectValue = document.getElementById('selectKotaBreakdown').value.toLowerCase();
+            let filtered = [];
+
+            if (currentUser.role === 'provinsi') {
+                filtered = globalData.filter(d => (d.Kabupaten_Kota || d['Kabupaten/Kota'] || "").toLowerCase().includes(selectValue.replace('kota ', '').replace('kabupaten ', '')));
+            } else if (currentUser.role === 'kabkota') {
+                filtered = globalData.filter(d => (d.Kecamatan || "").toLowerCase() === selectValue);
+            } else {
+                filtered = globalData.filter(d => (d.Kelurahan || "").toLowerCase() === selectValue);
+            }
+
+            const countAktif = filtered.filter(d => (d.Status_Keaktifan || d['Status Keaktifan'] || '') === 'Aktif').length;
+            const countPotensial = filtered.filter(d => (d.Status_Keaktifan || d['Status Keaktifan'] || '') === 'Potensial').length;
+            const countTidakAktif = filtered.filter(d => (d.Status_Keaktifan || d['Status Keaktifan'] || '') === 'Tidak Aktif').length;
+
+            if(chartBreakdownStatusInstance) chartBreakdownStatusInstance.destroy();
+            const ctxBS = document.getElementById('chartBreakdownStatus').getContext('2d');
+            chartBreakdownStatusInstance = new Chart(ctxBS, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Aktif', 'Potensial', 'Tidak Aktif'],
+                    datasets: [{ data: [countAktif, countPotensial, countTidakAktif], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            const unsurList = ["Struktur partai", "Kader pelopor", "Aleg", "Caleg", "Relawan", "Koordinator", "Penggerak pelayanan", "Simpatisan aktif"];
+            const unsurKeywords = [
+                ["struktur partai", "dpw", "dpd", "dpc"],
+                ["kader pelopor"], ["aleg"], ["caleg"], ["relawan"],
+                ["koordinator", "saksi"], ["penggerak pelayanan", "komunitas"], ["simpatisan"]
+            ];
+
+            const unsurCounts = unsurKeywords.map(keywords => {
+                return filtered.filter(d => {
+                    const u = (d.Unsur_Internal || d['Unsur Internal'] || "").toLowerCase();
+                    return keywords.some(kw => u.includes(kw));
+                }).length;
+            });
+
+            if(chartBreakdownUnsurInstance) chartBreakdownUnsurInstance.destroy();
+            const ctxBU = document.getElementById('chartBreakdownUnsur').getContext('2d');
+            chartBreakdownUnsurInstance = new Chart(ctxBU, {
+                type: 'bar',
+                data: {
+                    labels: unsurList,
+                    datasets: [{ label: 'Jumlah', data: unsurCounts, backgroundColor: '#3b82f6' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45 } },
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+
+            const jangkauanCounts = jangkauanCategories.map(cat => {
+                return filtered.filter(d => {
+                    const j = (d.Jangkauan_Keluarga || d['Jangkauan Keluarga'] || "").toLowerCase();
+                    if (cat.key === '50') return j.includes('lebih dari 50');
+                    return j.includes(cat.key);
+                }).length;
+            });
+
+            if(chartBreakdownJangkauanInstance) chartBreakdownJangkauanInstance.destroy();
+            const ctxBJ = document.getElementById('chartBreakdownJangkauan').getContext('2d');
+            chartBreakdownJangkauanInstance = new Chart(ctxBJ, {
+                type: 'bar',
+                data: {
+                    labels: jangkauanCategories.map(c => c.label),
+                    datasets: [{ label: 'Jumlah Penggerak', data: jangkauanCounts, backgroundColor: '#8b5cf6' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45 } },
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
