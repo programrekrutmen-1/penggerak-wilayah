@@ -431,11 +431,13 @@
             { label: "Belum diketahui", key: "belum" }
         ];
 
+        // Akun bawaan darurat yang dijamin selalu bisa masuk
         const MASTER_PROVINSI = { username: "dpwdki", password: "dpwpks", role: "provinsi", wilayah: "DKI Jakarta" };
+        const AKUN_KOTA_DARURAT = { username: "jaksel", password: "pksjaksel", role: "kabkota", wilayah: "Kota Jakarta Selatan" };
 
         let currentUser = null;
         let globalData = [];
-        let globalAccounts = [MASTER_PROVINSI];
+        let globalAccounts = [MASTER_PROVINSI, AKUN_KOTA_DARURAT];
 
         let chartKeaktifanInstance = null;
         let chartUnsurInstance = null;
@@ -483,8 +485,13 @@
             const saved = localStorage.getItem('dki_current_user');
             if (saved) {
                 const parsedUser = JSON.parse(saved);
-                currentUser = parsedUser;
-                initSessionAfterLogin();
+                const verifiedUser = globalAccounts.find(acc => acc.username === parsedUser.username);
+                if (verifiedUser) {
+                    currentUser = verifiedUser;
+                    initSessionAfterLogin();
+                } else {
+                    handleLogout();
+                }
             } else {
                 document.getElementById('login-page').classList.remove('hidden');
                 document.getElementById('app-container').classList.add('hidden');
@@ -643,7 +650,7 @@
             tbody.innerHTML = '';
 
             globalAccounts.forEach((acc) => {
-                if(acc.username === 'dpwdki') return;
+                if(acc.username === 'dpwdki' || acc.username === 'jaksel') return;
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-50">
                         <td class="p-3 font-medium text-slate-700">${acc.username}</td>
@@ -718,7 +725,7 @@
                 const response = await fetch(WEB_APP_URL);
                 const rawData = await response.json();
                 
-                globalAccounts = [MASTER_PROVINSI];
+                globalAccounts = [MASTER_PROVINSI, AKUN_KOTA_DARURAT];
                 const penggerakData = [];
 
                 rawData.forEach(row => {
@@ -730,7 +737,7 @@
                         const roleVal = row.Kecamatan || row['Kecamatan'] || "";
                         const wilVal = row.Kelurahan || row['Kelurahan'] || row.Basis_RW || "";
 
-                        if (userVal) {
+                        if (userVal && userVal !== 'undefined') {
                             globalAccounts.push({
                                 username: userVal.toString().trim(),
                                 password: passVal.toString().trim(),
@@ -746,9 +753,15 @@
                 if (currentUser) {
                     if (currentUser.role === 'kabkota') {
                         const wilTarget = currentUser.wilayah.replace('Kota ', '').replace('Kabupaten ', '').toLowerCase();
-                        globalData = penggerakData.filter(d => (d.Kabupaten_Kota || d['Kabupaten/Kota'] || "").toLowerCase().includes(wilTarget));
+                        globalData = penggerakData.filter(d => {
+                            const valKota = (d.Kabupaten_Kota || d['Kabupaten/Kota'] || "").toLowerCase();
+                            return valKota.includes(wilTarget);
+                        });
                     } else if (currentUser.role === 'kecamatan') {
-                        globalData = penggerakData.filter(d => (d.Kecamatan || "").toLowerCase() === currentUser.wilayah.toLowerCase());
+                        globalData = penggerakData.filter(d => {
+                            const valKec = (d.Kecamatan || "").toLowerCase();
+                            return valKec === currentUser.wilayah.toLowerCase();
+                        });
                     } else {
                         globalData = penggerakData;
                     }
